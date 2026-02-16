@@ -6,15 +6,13 @@ const port = process.env.PORT || 3000;
 
 const app = express();
 
-// --- ১. CORS ফিক্স (Boolean Filter ব্যবহার করা হয়েছে যেন undefined লিঙ্ক ঝামেলা না করে) ---
 const origins = [process.env.localhost_URL, process.env.netlify_URL].filter(
   Boolean,
 );
 
 app.use(
   cors({
-    origin: origins,
-    optionsSuccessStatus: 200,
+    origin: ['https://zenith-x-crypto.netlify.app'],
     credentials: true,
   }),
 );

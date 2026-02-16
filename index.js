@@ -11,7 +11,7 @@ app.use(
   cors({
     origin: [
       process.env.localhost_URL,
-      process.env.vercel_URL,
+      process.env.netlify_URL,
       process.env.client_URL,
     ],
     credentials: true,

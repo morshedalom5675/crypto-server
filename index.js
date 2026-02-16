@@ -12,7 +12,6 @@ app.use(
     origin: [
       process.env.localhost_URL,
       process.env.netlify_URL,
-      process.env.client_URL,
     ],
     credentials: true,
   }),

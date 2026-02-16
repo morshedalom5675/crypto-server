@@ -6,18 +6,20 @@ const port = process.env.PORT || 3000;
 
 const app = express();
 
-// Middleware
+// --- ১. CORS ফিক্স (Boolean Filter ব্যবহার করা হয়েছে যেন undefined লিঙ্ক ঝামেলা না করে) ---
+const origins = [process.env.localhost_URL, process.env.netlify_URL].filter(
+  Boolean,
+);
+
 app.use(
   cors({
-    origin: [
-      process.env.localhost_URL,
-      process.env.netlify_URL,
-    ],
+    origin: origins,
     credentials: true,
   }),
 );
 app.use(express.json());
 
+// --- ২. URI এবং প্রোডাকশন কানেকশন ফিক্স ---
 const uri = process.env.mongoDB_uri;
 
 const client = new MongoClient(uri, {
@@ -30,6 +32,7 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
+    // প্রোডাকশনে কানেকশন স্ট্যাবল রাখতে নিচের লাইনটি কমেন্ট আউট রাখাই ভালো (Vercel Serverless এর জন্য)
     // await client.connect();
 
     const db = client.db("ZenithX_Crypto");
@@ -38,15 +41,12 @@ async function run() {
     const sellersCollection = db.collection("sellers");
 
     // --- User Related API ---
-
-    // ১. ইউজার রেজিস্ট্রেশন
     app.post("/users", async (req, res) => {
       const user = req.body;
       const existingUser = await usersCollection.findOne({ email: user.email });
       if (existingUser) {
         return res.send({ message: "User already existing", insertedId: null });
       }
-      // ডিফল্ট ব্যালেন্স এবং রোল সেট করা (যদি না থাকে)
       const newUser = {
         ...user,
         role: user.role || "user",
@@ -57,27 +57,17 @@ async function run() {
       res.send(result);
     });
 
-    // ২. নির্দিষ্ট ইউজারের ডাটা ফেচ
     app.get("/user/:email", async (req, res) => {
       const email = req.params.email;
       const result = await usersCollection.findOne({ email: email });
       res.send(result);
     });
 
-    // ৩. প্রোফাইল আপডেট (নাম, ফোন, এবং ইমেজ) - নতুন যোগ করা হয়েছে
     app.patch("/user/update/:email", async (req, res) => {
       const email = req.params.email;
       const { name, phone, image } = req.body;
       const filter = { email: email };
-
-      const updateDoc = {
-        $set: {
-          name: name,
-          phone: phone,
-          image: image, // ফায়ারবেস বা ক্লাউডিনারি ইমেজ URL
-        },
-      };
-
+      const updateDoc = { $set: { name, phone, image } };
       try {
         const result = await usersCollection.updateOne(filter, updateDoc);
         res.send(result);
@@ -86,13 +76,11 @@ async function run() {
       }
     });
 
-    // ৪. সকল ইউজার লিস্ট (Admin Only)
     app.get("/admin/users", async (req, res) => {
       const result = await usersCollection.find().toArray();
       res.send(result);
     });
 
-    // ৫. ইউজারের রোল আপডেট
     app.patch("/admin/users/role/:id", async (req, res) => {
       const id = req.params.id;
       const { role } = req.body;
@@ -110,23 +98,23 @@ async function run() {
     });
 
     // --- Payment Related API ---
-
     app.post("/payments", async (req, res) => {
       const payment = req.body;
       const alreadyExists = await paymentsCollection.findOne({
         transactionId: payment.transactionId,
       });
       if (alreadyExists) {
-        return res.status(400).send({
-          success: false,
-          message: "This Transaction ID has already been used!",
-        });
+        return res
+          .status(400)
+          .send({
+            success: false,
+            message: "This Transaction ID has already been used!",
+          });
       }
       const result = await paymentsCollection.insertOne(payment);
       res.send(result);
     });
 
-    // existing user payment
     app.get("/my-payments/:email", async (req, res) => {
       const email = req.params.email;
       const result = await paymentsCollection
@@ -148,22 +136,18 @@ async function run() {
       const id = req.params.id;
       const filter = { _id: new ObjectId(id) };
       const payment = await paymentsCollection.findOne(filter);
-
       if (!payment || payment.status !== "pending") {
         return res
           .status(400)
           .send({ message: "Already processed or not found" });
       }
-
-      const updateStatus = await paymentsCollection.updateOne(filter, {
+      await paymentsCollection.updateOne(filter, {
         $set: { status: "approved" },
       });
-
-      const updateUserBalance = await usersCollection.updateOne(
+      await usersCollection.updateOne(
         { email: payment.email },
         { $inc: { balance: payment.amount } },
       );
-
       res.send({ success: true });
     });
 
@@ -177,8 +161,6 @@ async function run() {
     });
 
     // --- Seller/Merchant Request API ---
-
-    // seller request post (seller form)
     app.post("/seller-requests", async (req, res) => {
       const request = req.body;
       const alreadyExists = await sellersCollection.findOne({
@@ -193,7 +175,6 @@ async function run() {
       res.send(result);
     });
 
-    //   all seller api admin panel
     app.get("/admin/seller-requests", async (req, res) => {
       const result = await sellersCollection
         .find()
@@ -202,13 +183,12 @@ async function run() {
       res.send(result);
     });
 
-    // update seller status and approved
     app.patch("/admin/approve-seller/:id", async (req, res) => {
       const id = req.params.id;
       const filter = { _id: new ObjectId(id) };
-      const updateDoc = { $set: { status: "approved", isVerified: true } };
-
-      const result = await sellersCollection.updateOne(filter, updateDoc);
+      await sellersCollection.updateOne(filter, {
+        $set: { status: "approved", isVerified: true },
+      });
       const sellerData = await sellersCollection.findOne(filter);
       if (sellerData) {
         await usersCollection.updateOne(
@@ -216,10 +196,9 @@ async function run() {
           { $set: { role: "seller" } },
         );
       }
-      res.send(result);
+      res.send({ success: true });
     });
 
-    // delete seller request
     app.delete("/admin/reject-seller/:id", async (req, res) => {
       const id = req.params.id;
       const result = await sellersCollection.deleteOne({
@@ -228,7 +207,6 @@ async function run() {
       res.send(result);
     });
 
-    // all approved seller
     app.get("/sellers/approved", async (req, res) => {
       const result = await sellersCollection
         .find({ status: "approved" })

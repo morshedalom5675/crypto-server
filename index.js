@@ -6,19 +6,15 @@ const port = process.env.PORT || 3000;
 
 const app = express();
 
-const origins = [process.env.localhost_URL, process.env.netlify_URL].filter(
-  Boolean,
-);
-
 app.use(
   cors({
-    origin: ['https://zenith-x-crypto.netlify.app'],
+    origin: [process.env.netlify_URL],
+    origin: [process.env.localhost_URL],
     credentials: true,
   }),
 );
 app.use(express.json());
 
-// --- ২. URI এবং প্রোডাকশন কানেকশন ফিক্স ---
 const uri = process.env.mongoDB_uri;
 
 const client = new MongoClient(uri, {
@@ -31,7 +27,6 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
-    // প্রোডাকশনে কানেকশন স্ট্যাবল রাখতে নিচের লাইনটি কমেন্ট আউট রাখাই ভালো (Vercel Serverless এর জন্য)
     // await client.connect();
 
     const db = client.db("ZenithX_Crypto");
@@ -40,6 +35,14 @@ async function run() {
     const sellersCollection = db.collection("sellers");
 
     // --- User Related API ---
+    app.get('/users/:email/role', async(req, res) => {
+      const email = req.params.email
+      const query = { email }
+      const result = await usersCollection.findOne(query)
+      res.send({role:result?.role || 'User'})
+    })
+
+
     app.post("/users", async (req, res) => {
       const user = req.body;
       const existingUser = await usersCollection.findOne({ email: user.email });

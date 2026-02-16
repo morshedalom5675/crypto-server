@@ -14,6 +14,7 @@ const origins = [process.env.localhost_URL, process.env.netlify_URL].filter(
 app.use(
   cors({
     origin: origins,
+    optionsSuccessStatus: 200,
     credentials: true,
   }),
 );
@@ -104,12 +105,10 @@ async function run() {
         transactionId: payment.transactionId,
       });
       if (alreadyExists) {
-        return res
-          .status(400)
-          .send({
-            success: false,
-            message: "This Transaction ID has already been used!",
-          });
+        return res.status(400).send({
+          success: false,
+          message: "This Transaction ID has already been used!",
+        });
       }
       const result = await paymentsCollection.insertOne(payment);
       res.send(result);
